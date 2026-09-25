@@ -75,11 +75,22 @@ npm install
 npm run dev              # tsx, restarts on change
 ```
 
-For production:
+For production (Node):
 
 ```bash
 npm run build
 npm start
+```
+
+For production (Docker):
+
+```bash
+docker build -t mimir-telegram-bot .
+docker run -d \
+  --name mimir-bot \
+  --env-file .env \
+  -v $(pwd)/data:/app/data \
+  mimir-telegram-bot
 ```
 
 `.env.example` ships with the live Stellar Testnet contract ids, so the only two
@@ -115,10 +126,15 @@ npm run scan                     # both contracts, from the RPC's retained floor
 npm run scan -- --pages 40       # walk further
 npm run scan -- --show 20        # print 20 decoded events per contract
 npm run scan -- --from 4226500   # explicit start ledger
+npm run scan -- --json           # one mimir-scan-v1 JSON document on stdout
+npm run scan -- --json --show 20 # JSON including 20 decoded events per contract
 ```
 
-It prints the ledger window, an event-name histogram, and the decoded payloads.
-This is how the decoder was verified against the live deployment.
+Human mode prints the ledger window, an event-name histogram, and the decoded
+payloads. With `--json`, stdout is a single `mimir-scan-v1` document (bigints as
+decimal strings) and progress goes to stderr, so `npm run scan -- --json | jq`
+stays valid. Neither mode prints bot tokens or signing keys — the scanner never
+holds them. This is how the decoder was verified against the live deployment.
 
 ## Local mock profile
 
@@ -223,6 +239,10 @@ rather than replaying the whole retained window into your chat. `/pause` and
 `/resume` never edit this file; they only control scheduling, so the cursor
 format remains version 1 and a restart does not preserve a pause.
 
+Tests never use this directory: they run against an ephemeral data directory
+created under the OS temp dir and removed afterwards (see
+[docs/contributor-fixtures.md](docs/contributor-fixtures.md)).
+
 **Deployment note:** a flat file is fine for v0 but it must survive restarts. On
 an always-on host, put `data/` on a persistent volume (or point `CURSOR_FILE`
 at one). On an ephemeral filesystem every restart is a cold start, and events
@@ -301,7 +321,7 @@ chat ids, private keys, or unbounded remote payloads.
 
 Configuration (see `.env.example`):
 
-- `HEALTH_HOST` — bind address (default `127.0.0.1`)
+- `HEALTH_HOST` — bind address (default `127.0.0.1`; set to `0.0.0.0` for Docker)
 - `HEALTH_PORT` — TCP port (default `8787`; `0` disables)
 - `HEALTH_STALE_MS` — degraded if no successful poll within this window after the first success (default `90000`; `0` disables)
 

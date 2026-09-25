@@ -92,27 +92,67 @@ export type MarketPayload =
   | { name: "withdrawal"; to: string; amount: bigint }
   | { name: "withdrawal_pending"; to: string; amount: bigint };
 
+export type SquadMarketCreatedPayload = {
+  name: "market_created";
+  marketId: number;
+  captain: string;
+  deadline: number;
+  feeBps: number;
+  question: string;
+};
+
+export type SquadDepositedPayload = {
+  name: "deposited";
+  marketId: number;
+  side: number;
+  participant: string;
+  amount: bigint;
+  shares: bigint;
+};
+
+export type SquadWithdrawnPayload = {
+  name: "withdrawn";
+  marketId: number;
+  side: number;
+  participant: string;
+  amount: bigint;
+};
+
+export type SquadResolvedPayload = {
+  name: "resolved";
+  marketId: number;
+  result: number;
+  poolA: bigint;
+  poolB: bigint;
+};
+
+export type SquadClaimedPayload = {
+  name: "claimed";
+  marketId: number;
+  participant: string;
+  gross: bigint;
+  fee: bigint;
+  net: bigint;
+};
+
+export type SquadFeesClaimedPayload = {
+  name: "fees_claimed";
+  recipient: string;
+  amount: bigint;
+};
+
 export type SquadPayload =
-  | {
-      name: "market_created";
-      marketId: number;
-      captain: string;
-      deadline: number;
-      feeBps: number;
-      question: string;
-    }
-  | {
-      name: "deposited";
-      marketId: number;
-      side: number;
-      participant: string;
-      amount: bigint;
-      shares: bigint;
-    }
-  | { name: "withdrawn"; marketId: number; side: number; participant: string; amount: bigint }
-  | { name: "resolved"; marketId: number; result: number; poolA: bigint; poolB: bigint }
-  | { name: "claimed"; marketId: number; participant: string; gross: bigint; fee: bigint; net: bigint }
-  | { name: "fees_claimed"; recipient: string; amount: bigint };
+  | SquadMarketCreatedPayload
+  | SquadDepositedPayload
+  | SquadWithdrawnPayload
+  | SquadResolvedPayload
+  | SquadClaimedPayload
+  | SquadFeesClaimedPayload;
+
+export type SquadEvent = EventMeta & {
+  source: "squad";
+  payload: SquadPayload | UnknownPayload;
+};
 
 /**
  * Anything this bot has no notification for: admin events (`oracle_changed`,
@@ -127,7 +167,44 @@ export interface UnknownPayload {
 
 export type EventPayload = MarketPayload | SquadPayload | UnknownPayload;
 
-export type DecodedEvent = EventMeta & { payload: EventPayload };
+export type ClaimCreatedEvent = EventMeta & { payload: Extract<MarketPayload, { name: "claim_created" }> };
+export type ClaimChallengedEvent = EventMeta & { payload: Extract<MarketPayload, { name: "claim_challenged" }> };
+export type ClaimResolvedEvent = EventMeta & { payload: Extract<MarketPayload, { name: "claim_resolved" }> };
+export type ClaimCancelledEvent = EventMeta & { payload: Extract<MarketPayload, { name: "claim_cancelled" }> };
+export type MarketSettledEvent = EventMeta & { payload: Extract<MarketPayload, { name: "market_settled" }> };
+export type ChallengerPaidEvent = EventMeta & { payload: Extract<MarketPayload, { name: "challenger_paid" }> };
+export type FeeClaimedEvent = EventMeta & { payload: Extract<MarketPayload, { name: "fee_claimed" }> };
+export type WithdrawalEvent = EventMeta & { payload: Extract<MarketPayload, { name: "withdrawal" }> };
+export type WithdrawalPendingEvent = EventMeta & { payload: Extract<MarketPayload, { name: "withdrawal_pending" }> };
+
+export type SquadMarketCreatedEvent = EventMeta & { payload: Extract<SquadPayload, { name: "market_created" }> };
+export type SquadDepositedEvent = EventMeta & { payload: Extract<SquadPayload, { name: "deposited" }> };
+export type SquadWithdrawnEvent = EventMeta & { payload: Extract<SquadPayload, { name: "withdrawn" }> };
+export type SquadResolvedEvent = EventMeta & { payload: Extract<SquadPayload, { name: "resolved" }> };
+export type SquadClaimedEvent = EventMeta & { payload: Extract<SquadPayload, { name: "claimed" }> };
+export type SquadFeesClaimedEvent = EventMeta & { payload: Extract<SquadPayload, { name: "fees_claimed" }> };
+
+export type UnknownMarketEvent = EventMeta & { payload: UnknownPayload };
+
+export type MarketEvent =
+  | ClaimCreatedEvent
+  | ClaimChallengedEvent
+  | ClaimResolvedEvent
+  | ClaimCancelledEvent
+  | MarketSettledEvent
+  | ChallengerPaidEvent
+  | FeeClaimedEvent
+  | WithdrawalEvent
+  | WithdrawalPendingEvent
+  | SquadMarketCreatedEvent
+  | SquadDepositedEvent
+  | SquadWithdrawnEvent
+  | SquadResolvedEvent
+  | SquadClaimedEvent
+  | SquadFeesClaimedEvent
+  | UnknownMarketEvent;
+
+export type DecodedEvent = MarketEvent;
 
 /** Keep decoder diagnostics useful without copying an unbounded RPC payload. */
 const MAX_DIAGNOSTIC_LENGTH = 200;
@@ -432,7 +509,7 @@ export function decodeEvent(source: ContractSource, event: rpc.Api.EventResponse
         ? decodeMarket(eventName, topics, fields)
         : decodeSquad(eventName, topics, fields);
 
-    if (payload) return { ...meta, payload };
+    if (payload) return { ...meta, payload } as DecodedEvent;
     return { ...meta, payload: { name: "unknown", eventName, reason: "no decoder" } };
   } catch (err) {
     return {

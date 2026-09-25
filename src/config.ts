@@ -246,6 +246,7 @@ function collector(profile: Record<string, string>) {
           );
         }
       }
+
       return entries;
     },
 

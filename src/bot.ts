@@ -9,6 +9,7 @@
 
 import type { UserFromGetMe } from "grammy/types";
 import { Bot, type Context } from "grammy";
+import type { UserFromGetMe } from "grammy/types";
 
 import { escapeMd, previewMessage, safeErrorMessage } from "./notifications/format.js";
 export { previewMessage } from "./notifications/format.js";
@@ -204,6 +205,8 @@ export interface BotDeps {
    * getMe() call so `bot.handleUpdate()` works without a real Telegram token.
    */
   botInfo?: UserFromGetMe;
+  pause: () => PollerPauseResult;
+  resume: () => PollerResumeResult;
 }
 
 function isOperator(ctx: Context, config: BotConfig): boolean {
@@ -224,6 +227,11 @@ function isChatAllowed(allowedChatIds: string[], chatId: number): boolean {
   if (allowedChatIds.length === 0) return true;
   const asString = String(chatId);
   return allowedChatIds.some((allowed) => allowed === asString);
+}
+
+function isOperator(ctx: Context, config: BotConfig): boolean {
+  const operatorId = config.operatorTelegramUserId;
+  return operatorId !== null && ctx.from?.id.toString() === operatorId;
 }
 
 /** Register command handlers on a grammy-compatible bot (also useful in tests). */
@@ -291,6 +299,7 @@ export function createBot(deps: BotDeps): Bot {
     deps.config.botToken,
     deps.botInfo !== undefined ? { botInfo: deps.botInfo } : undefined,
   );
+  const bot = new Bot(deps.config.botToken, deps.botInfo !== undefined ? { botInfo: deps.botInfo } : undefined);
   registerCommandHandlers(bot, deps);
 
   // grammy rethrows handler errors by default, which would take the process
