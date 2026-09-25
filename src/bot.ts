@@ -7,7 +7,6 @@
  * state. All chain logic lives in `src/poller.ts` and `src/stellar/`.
  */
 
-import { Bot } from "grammy";
 import type { UserFromGetMe } from "grammy/types";
 import { Bot, type Context } from "grammy";
 
@@ -198,11 +197,18 @@ export function resumeMessage(result: PollerResumeResult): string {
 export interface BotDeps {
   config: BotConfig;
   status: () => PollerStatus;
+  pause: () => PollerPauseResult;
+  resume: () => PollerResumeResult;
   /**
    * Pre-populated bot info. When provided (e.g. in tests) grammy skips the
    * getMe() call so `bot.handleUpdate()` works without a real Telegram token.
    */
   botInfo?: UserFromGetMe;
+}
+
+function isOperator(ctx: Context, config: BotConfig): boolean {
+  const operatorId = config.operatorTelegramUserId;
+  return operatorId !== null && ctx.from?.id.toString() === operatorId;
 }
 
 /**
@@ -218,18 +224,6 @@ function isChatAllowed(allowedChatIds: string[], chatId: number): boolean {
   if (allowedChatIds.length === 0) return true;
   const asString = String(chatId);
   return allowedChatIds.some((allowed) => allowed === asString);
-}
-
-export function createBot(deps: BotDeps): Bot {
-  const { config, status } = deps;
-  const bot = new Bot(config.botToken, deps.botInfo !== undefined ? { botInfo: deps.botInfo } : undefined);
-  pause: () => PollerPauseResult;
-  resume: () => PollerResumeResult;
-}
-
-function isOperator(ctx: Context, config: BotConfig): boolean {
-  const operatorId = config.operatorTelegramUserId;
-  return operatorId !== null && ctx.from?.id.toString() === operatorId;
 }
 
 /** Register command handlers on a grammy-compatible bot (also useful in tests). */
@@ -255,10 +249,6 @@ export function registerCommandHandlers(bot: Bot, deps: BotDeps): void {
       );
       return;
     }
-    await ctx.reply(statusMessage(config, status()), {
-      parse_mode: "MarkdownV2",
-      link_preview_options: { is_disabled: true },
-    });
     await ctx.reply(statusMessage(config, status()), TELEGRAM_OPTIONS);
   });
 
@@ -297,7 +287,10 @@ export function registerCommandHandlers(bot: Bot, deps: BotDeps): void {
 }
 
 export function createBot(deps: BotDeps): Bot {
-  const bot = new Bot(deps.config.botToken);
+  const bot = new Bot(
+    deps.config.botToken,
+    deps.botInfo !== undefined ? { botInfo: deps.botInfo } : undefined,
+  );
   registerCommandHandlers(bot, deps);
 
   // grammy rethrows handler errors by default, which would take the process
